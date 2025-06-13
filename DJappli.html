@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entrée Mariage Dorcas & Jefté</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f4f8;
+      text-align: center;
+      padding: 20px;
+    }
+    .scanner {
+      margin: 0 auto;
+      width: 300px;
+    }
+    .status {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
+    .ok { color: green; }
+    .invalid, .already { color: red; }
+    .scanned-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 30px;
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>Entrée Mariage Dorcas & Jefté</h1>
+  <div id="reader" class="scanner"></div>
+
+  <div class="status" id="status"></div>
+  <div id="info"></div>
+  <button onclick="resetScan()">Scanner un autre QR</button>
+
+  <div class="scanned-list">
+    <h3>Invités scannés :</h3>
+    <ul id="scannedList"></ul>
+  </div>
+
+  <script>
+    const invitesAutorises = [
+      { nom: "Naomi", personnes: 1, table: 3 },
+      { nom: "Couple Maro", personnes: 2, table: 3 },
+      { nom: "Couple Jésuane", personnes: 2, table: 3 },
+      { nom: "Dicap's", personnes: 2, table: 3 },
+      { nom: "Ritchy", personnes: 1, table: 3 },
+      { nom: "Ivana", personnes: 1, table: 3 }
+    ];
+
+    const normalize = (str) => str.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+    const scanned = JSON.parse(localStorage.getItem("scannedList") || "[]");
+    scanned.forEach(s => addToList(s));
+
+    function resetScan() {
+      document.getElementById("status").innerText = "";
+      document.getElementById("info").innerText = "";
+    }
+
+    function addToList(invite) {
+      const ul = document.getElementById("scannedList");
+      const li = document.createElement("li");
+      li.textContent = `✅ ${invite.nom} - ${invite.personnes} pers. - Table ${invite.table}`;
+      ul.appendChild(li);
+    }
+
+    function handleScan(decodedText) {
+      try {
+        const data = JSON.parse(decodedText);
+        const nomNorm = normalize(data.nom);
+        const already = scanned.find(s => normalize(s.nom) === nomNorm);
+        const valid = invitesAutorises.find(i => normalize(i.nom) === nomNorm && i.personnes == data.personnes && i.table == data.table);
+
+        const status = document.getElementById("status");
+        const info = document.getElementById("info");
+
+        if (already) {
+          status.innerText = "Déjà scanné !";
+          status.className = "already";
+        } else if (valid) {
+          status.innerText = "Invitation valide ! Bienvenue !";
+          status.className = "ok";
+          scanned.push(data);
+          localStorage.setItem("scannedList", JSON.stringify(scanned));
+          info.innerHTML = `<p><strong>Nom :</strong> ${data.nom}</p><p><strong>Personnes :</strong> ${data.personnes}</p><p><strong>Table :</strong> ${data.table}</p>`;
+          addToList(data);
+        } else {
+          status.innerText = "Invitation non reconnue";
+          status.className = "invalid";
+        }
+      } catch (e) {
+        document.getElementById("status").innerText = "QR invalide";
+        document.getElementById("status").className = "invalid";
+      }
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      handleScan
+    ).catch(err => console.error(err));
+  </script>
+</body>
+</html>
