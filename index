@@ -4,49 +4,148 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Entrée Mariage Dorcas & Jefté</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="./html5-qrcode.min.js" type="text/javascript"></script>
+
   <style>
+    /* ---- Fond et thème adaptatif ---- */
+    :root {
+      --color-text: #ffffff;
+      --color-bg-overlay: rgba(0, 0, 0, 0.45);
+      --color-valid: #00ff9c;
+      --color-invalid: #ff4d4d;
+      --color-accent: #b76e79;
+    }
+
+    [data-theme="day"] {
+      --color-text: #111;
+      --color-bg-overlay: rgba(255, 255, 255, 0.4);
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f0f4f8;
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: url('./DSC02860 2.jpg') center/cover no-repeat fixed;
+      color: var(--color-text);
       text-align: center;
-      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: background-color 0.6s, color 0.6s;
+      overflow-x: hidden;
     }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--color-bg-overlay);
+      z-index: 0;
+      transition: background 0.6s;
+    }
+
+    h1 {
+      z-index: 1;
+      font-size: 2em;
+      letter-spacing: 1px;
+      color: var(--color-accent);
+      text-shadow: 0 0 15px rgba(183,110,121,0.6);
+    }
+
     .scanner {
-      margin: 0 auto;
-      width: 300px;
-    }
-    .status {
+      z-index: 1;
+      width: 320px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      border: 2px solid var(--color-accent);
+      border-radius: 16px;
+      padding: 10px;
       margin-top: 20px;
-      font-size: 1.2em;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.3);
     }
-    .ok { color: green; }
-    .invalid, .already { color: red; }
+
+    .status {
+      z-index: 1;
+      margin-top: 20px;
+      font-size: 1.3em;
+      font-weight: 600;
+      text-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+
+    .ok { color: var(--color-valid); }
+    .invalid, .already { color: var(--color-invalid); }
+
+    button {
+      z-index: 1;
+      margin-top: 15px;
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.1s;
+    }
+
+    button:hover {
+      background: #a85d6a;
+      transform: scale(1.05);
+    }
+
     .scanned-list {
+      z-index: 1;
       max-height: 200px;
       overflow-y: auto;
-      margin-top: 30px;
-      background: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      margin-top: 25px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(6px);
+      padding: 15px;
+      border-radius: 10px;
+      width: 300px;
+      color: var(--color-text);
+    }
+
+    .scanned-list h3 {
+      color: var(--color-accent);
+      text-shadow: 0 0 10px rgba(183,110,121,0.5);
+    }
+
+    #count {
+      margin-top: 10px;
+      font-weight: bold;
+      text-shadow: 0 0 5px rgba(0,0,0,0.2);
     }
   </style>
 </head>
 <body>
-  <h1>Entrée Mariage Dorcas & Jefté</h1>
+  <div class="overlay"></div>
+
+  <h1>SCANNE LES PASS AU MARIAGE DE RÊVE<br>DORCAS & JEFTÉ 💍</h1>
+
   <div id="reader" class="scanner"></div>
 
   <div class="status" id="status"></div>
   <div id="info"></div>
+
+  <p id="count">Invités scannés : 0</p>
+
   <button onclick="resetScan()">Scanner un autre QR</button>
+  <button onclick="exportScannedList()">Exporter la liste</button>
 
   <div class="scanned-list">
     <h3>Invités scannés :</h3>
     <ul id="scannedList"></ul>
   </div>
 
+  <audio id="sound-valid" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_bdb3c98d8d.mp3?filename=correct-2-46134.mp3"></audio>
+  <audio id="sound-error" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_28298b3dbf.mp3?filename=error-2-126514.mp3"></audio>
+
   <script>
+    // --- Thème adaptatif ---
+    const hour = new Date().getHours();
+    document.body.setAttribute('data-theme', (hour >= 7 && hour < 19) ? 'day' : 'night');
+
+    // --- Liste d’invités autorisés ---
     const invitesAutorises = [
       { nom: "Naomi", personnes: 1, table: 3 },
       { nom: "Couple Maro", personnes: 2, table: 3 },
@@ -57,13 +156,20 @@
     ];
 
     const normalize = (str) => str.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
-
     const scanned = JSON.parse(localStorage.getItem("scannedList") || "[]");
     scanned.forEach(s => addToList(s));
+    updateCount();
+
+    let lastScanned = "";
+    let lastScanTime = 0;
 
     function resetScan() {
       document.getElementById("status").innerText = "";
       document.getElementById("info").innerText = "";
+    }
+
+    function updateCount() {
+      document.getElementById("count").innerText = `Invités scannés : ${scanned.length}`;
     }
 
     function addToList(invite) {
@@ -74,41 +180,70 @@
     }
 
     function handleScan(decodedText) {
+      const now = Date.now();
+      if (decodedText === lastScanned && now - lastScanTime < 3000) return;
+      lastScanned = decodedText;
+      lastScanTime = now;
+
+      const successSound = document.getElementById("sound-valid");
+      const errorSound = document.getElementById("sound-error");
+      const status = document.getElementById("status");
+      const info = document.getElementById("info");
+
       try {
         const data = JSON.parse(decodedText);
         const nomNorm = normalize(data.nom);
         const already = scanned.find(s => normalize(s.nom) === nomNorm);
         const valid = invitesAutorises.find(i => normalize(i.nom) === nomNorm && i.personnes == data.personnes && i.table == data.table);
 
-        const status = document.getElementById("status");
-        const info = document.getElementById("info");
-
         if (already) {
           status.innerText = "Déjà scanné !";
           status.className = "already";
+          errorSound.play();
         } else if (valid) {
-          status.innerText = "Invitation valide ! Bienvenue !";
+          status.innerText = "✅ Invitation valide ! Bienvenue 🎉";
           status.className = "ok";
+          successSound.play();
           scanned.push(data);
           localStorage.setItem("scannedList", JSON.stringify(scanned));
           info.innerHTML = `<p><strong>Nom :</strong> ${data.nom}</p><p><strong>Personnes :</strong> ${data.personnes}</p><p><strong>Table :</strong> ${data.table}</p>`;
           addToList(data);
+          updateCount();
         } else {
-          status.innerText = "Invitation non reconnue";
+          status.innerText = "❌ Invitation non reconnue";
           status.className = "invalid";
+          errorSound.play();
         }
       } catch (e) {
-        document.getElementById("status").innerText = "QR invalide";
-        document.getElementById("status").className = "invalid";
+        status.innerText = "QR invalide";
+        status.className = "invalid";
+        errorSound.play();
       }
     }
 
-    const html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      handleScan
-    ).catch(err => console.error(err));
+    function exportScannedList() {
+      const data = JSON.parse(localStorage.getItem("scannedList") || "[]");
+      const csv = "Nom,Personnes,Table\n" + data.map(i => `${i.nom},${i.personnes},${i.table}`).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "invites_scannes.csv";
+      a.click();
+    }
+
+    window.addEventListener('load', () => {
+      const html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        handleScan
+      ).catch(err => {
+        document.getElementById("status").innerText =
+          "Impossible d’accéder à la caméra. Vérifie les autorisations.";
+        document.getElementById("status").className = "invalid";
+        console.error(err);
+      });
+    });
   </script>
 </body>
 </html>
