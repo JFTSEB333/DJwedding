@@ -7,7 +7,6 @@
   <script src="./html5-qrcode.min.js" type="text/javascript"></script>
 
   <style>
-    /* ---- Fond et thème adaptatif ---- */
     :root {
       --color-text: #ffffff;
       --color-bg-overlay: rgba(0, 0, 0, 0.45);
@@ -94,26 +93,44 @@
 
     .scanned-list {
       z-index: 1;
-      max-height: 200px;
+      max-height: 300px;
       overflow-y: auto;
       margin-top: 25px;
       background: rgba(255,255,255,0.1);
       backdrop-filter: blur(6px);
       padding: 15px;
       border-radius: 10px;
-      width: 300px;
+      width: 350px;
       color: var(--color-text);
     }
 
     .scanned-list h3 {
       color: var(--color-accent);
       text-shadow: 0 0 10px rgba(183,110,121,0.5);
+      margin-bottom: 10px;
     }
 
     #count {
       margin-top: 10px;
       font-weight: bold;
       text-shadow: 0 0 5px rgba(0,0,0,0.2);
+    }
+
+    .scanned-list li input {
+      padding: 3px 6px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      background: rgba(255,255,255,0.8);
+      color: #000;
+      margin-left: 10px;
+      flex: 1;
+    }
+
+    .scanned-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
     }
   </style>
 </head>
@@ -141,11 +158,9 @@
   <audio id="sound-error" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_28298b3dbf.mp3?filename=error-2-126514.mp3"></audio>
 
   <script>
-    // --- Thème adaptatif ---
     const hour = new Date().getHours();
     document.body.setAttribute('data-theme', (hour >= 7 && hour < 19) ? 'day' : 'night');
 
-    // --- Liste d’invités autorisés ---
     const invitesAutorises = [
       { nom: "Naomi", personnes: 1, table: 3 },
       { nom: "Couple Maro", personnes: 2, table: 3 },
@@ -174,8 +189,23 @@
 
     function addToList(invite) {
       const ul = document.getElementById("scannedList");
+
       const li = document.createElement("li");
-      li.textContent = `✅ ${invite.nom} - ${invite.personnes} pers. - Table ${invite.table}`;
+
+      const infoSpan = document.createElement("span");
+      infoSpan.textContent = `✅ ${invite.nom} - ${invite.personnes} pers. - Table ${invite.table}`;
+
+      const commentInput = document.createElement("input");
+      commentInput.type = "text";
+      commentInput.placeholder = "Commentaires...";
+      commentInput.value = invite.comment || "";
+      commentInput.addEventListener("input", () => {
+        invite.comment = commentInput.value;
+        localStorage.setItem("scannedList", JSON.stringify(scanned));
+      });
+
+      li.appendChild(infoSpan);
+      li.appendChild(commentInput);
       ul.appendChild(li);
     }
 
@@ -197,15 +227,20 @@
         const valid = invitesAutorises.find(i => normalize(i.nom) === nomNorm && i.personnes == data.personnes && i.table == data.table);
 
         if (already) {
-          status.innerText = "Déjà scanné !";
-          status.className = "already";
-          errorSound.play();
+          status.innerText = `✅ ${already.nom} est de retour !`;
+          status.className = "ok";
+          successSound.play();
+          info.innerHTML = `<p><strong>Nom :</strong> ${already.nom}</p><p><strong>Personnes :</strong> ${already.personnes}</p><p><strong>Table :</strong> ${already.table}</p>`;
+          return;
         } else if (valid) {
           status.innerText = "✅ Invitation valide ! Bienvenue 🎉";
           status.className = "ok";
           successSound.play();
+
+          data.comment = ""; // champ commentaire vide par défaut
           scanned.push(data);
           localStorage.setItem("scannedList", JSON.stringify(scanned));
+
           info.innerHTML = `<p><strong>Nom :</strong> ${data.nom}</p><p><strong>Personnes :</strong> ${data.personnes}</p><p><strong>Table :</strong> ${data.table}</p>`;
           addToList(data);
           updateCount();
@@ -223,27 +258,4 @@
 
     function exportScannedList() {
       const data = JSON.parse(localStorage.getItem("scannedList") || "[]");
-      const csv = "Nom,Personnes,Table\n" + data.map(i => `${i.nom},${i.personnes},${i.table}`).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "invites_scannes.csv";
-      a.click();
-    }
-
-    window.addEventListener('load', () => {
-      const html5QrCode = new Html5Qrcode("reader");
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        handleScan
-      ).catch(err => {
-        document.getElementById("status").innerText =
-          "Impossible d’accéder à la caméra. Vérifie les autorisations.";
-        document.getElementById("status").className = "invalid";
-        console.error(err);
-      });
-    });
-  </script>
-</body>
-</html>
+      const csv = "Nom,Personnes,Table,Commentaires\n" + data.map(i => `${i.nom},${i.personnes},${i.table
